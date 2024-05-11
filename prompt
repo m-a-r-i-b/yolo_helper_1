@@ -1,2 +1,2 @@
 NEW PROMPT
-please change the line thickness to 40 in the custom dataset file
+Change the line thickness back to 20, and also change the function make_folders(path="output") to have a default value of "out_folders" in the converter file

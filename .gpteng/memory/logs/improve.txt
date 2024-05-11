@@ -735,3 +735,305 @@ File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/yolo2coco.py
 +    thickness = 40
      for i, det in enumerate(pred):
 ```
+
+2024-05-11T10:09:04.149157
+================================ System Message ================================
+
+You will get instructions for code to write.
+You will write a very long answer. Make sure that every detail of the architecture is, in the end, implemented as code.
+Think step by step and reason yourself to the correct decisions to make sure we get it right.
+Make changes to existing code and implement new code in the unified git diff syntax. When implementing new code, First lay out the names of the core classes, functions, methods that will be necessary, As well as a quick comment on their purpose.
+
+You will output the content of each file necessary to achieve the goal, including ALL code.
+Output requested code changes and new code in the unified "git diff" syntax. Example:
+
+```diff
+--- example.txt
++++ example.txt
+@@ -6,3 +6,4 @@
+     line content A
+     line content B
++    new line added
+-    original line X
++    modified line X with changes
+@@ -26,4 +27,5 @@
+         condition check:
+-            action for condition A
++            if certain condition is met:
++                alternative action for condition A
+         another condition check:
+-            action for condition B
++            modified action for condition B
+```
+
+Example of a git diff creating a new file:
+
+```diff
+--- /dev/null
++++ new_file.txt
+@@ -0,0 +1,3 @@
++First example line
++
++Last example line
+```
+-A program will apply the diffs you generate exactly to the code, so diffs must be precise and unambiguous!
+-Every diff must be fenced with triple backtick ```.
+-The file names at the beginning of a diff, (lines starting with --- and +++) is the relative path to the file before and after the diff.
+-LINES TO BE REMOVED (starting with single -) AND LINES TO BE RETAIN (no starting symbol) HAVE TO REPLICATE THE DIFFED HUNK OF THE CODE EXACTLY LINE BY LINE. KEEP THE NUMBER OF RETAIN LINES SMALL IF POSSIBLE.
+-EACH LINE IN THE SOURCE FILES STARTS WITH A LINE NUMBER, WHICH IS NOT PART OF THE SOURCE CODE. NEVER TRANSFER THESE LINE NUMBERS TO THE DIFF HUNKS.
+-AVOID STARTING A HUNK WITH AN EMPTY LINE.
+-ALL DIFFS WILL BE APPLIED SIMULTANEOUSLY, AVOID SEQUENTIAL HUNKS.
+
+
+As far as compatible with the user request, start with the "entrypoint" file, then go to the ones that are imported by that file, and so on.
+Please note that the code should be fully functional. No placeholders.
+
+Follow a language and framework appropriate best practice file naming convention.
+Make sure that files contain all imports, types etc.  The code should be fully functional. Make sure that code in different files are compatible with each other.
+Ensure to implement all code, if you are unsure, write a plausible implementation.
+Include module dependency or package manager dependency definition file.
+Before you finish, double check that all parts of the architecture is present in the files.
+
+When you are done, write finish with "this concludes a fully working implementation".
+
+Useful to know:
+Almost always put different classes in different files.
+Always use the programming language the user asks for.
+For Python, you always create an appropriate requirements.txt file.
+For NodeJS, you always create an appropriate package.json file.
+Always add a comment briefly describing the purpose of the function definition.
+Add comments explaining very complex bits of logic.
+Always follow the best practices for the requested languages for folder/file structure and how to package the project.
+
+
+Python toolbelt preferences:
+- pytest
+- dataclasses
+
+
+================================ Human Message =================================
+
+```
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/convertor.py
+1 import os
+2 import json
+3 from tqdm import tqdm
+4 import shutil
+5 
+6 def make_folders(path="output"):
+7     if os.path.exists(path):
+8         shutil.rmtree(path)
+9     os.makedirs(path)
+10     return path
+11     
+12 def convert_bbox_coco2yolo(img_width, img_height, bbox):
+13     """
+14     Convert bounding box from COCO  format to YOLO format
+15 
+16     Parameters
+17     ----------
+18     img_width : int
+19         width of image
+20     img_height : int
+21         height of image
+22     bbox : list[int]
+23         bounding box annotation in COCO format: 
+24         [top left x position, top left y position, width, height]
+25 
+26     Returns
+27     -------
+28     list[float]
+29         bounding box annotation in YOLO format: 
+30         [x_center_rel, y_center_rel, width_rel, height_rel]
+31     """
+32     
+33     # YOLO bounding box format: [x_center, y_center, width, height]
+34     # (float values relative to width and height of image)
+35     x_tl, y_tl, w, h = bbox
+36 
+37     dw = 1.0 / img_width
+38     dh = 1.0 / img_height
+39 
+40     x_center = x_tl + w / 2.0
+41     y_center = y_tl + h / 2.0
+42 
+43     x = x_center * dw
+44     y = y_center * dh
+45     w = w * dw
+46     h = h * dh
+47 
+48     return [x, y, w, h]
+49 
+50 def convert_coco_json_to_yolo_txt(output_path, json_file):
+51 
+52     path = make_folders(output_path)
+53 
+54     with open(json_file) as f:
+55         json_data = json.load(f)
+56 
+57     # write _darknet.labels, which holds names of all classes (one class per line)
+58     label_file = os.path.join(output_path, "_darknet.labels")
+59     with open(label_file, "w") as f:
+60         for category in tqdm(json_data["categories"], desc="Categories"):
+61             category_name = category["name"]
+62             f.write(f"{category_name}\n")
+63 
+64     for image in tqdm(json_data["images"], desc="Annotation txt for each iamge"):
+65         img_id = image["id"]
+66         img_name = image["file_name"]
+67         img_width = image["width"]
+68         img_height = image["height"]
+69 
+70         anno_in_image = [anno for anno in json_data["annotations"] if anno["image_id"] == img_id]
+71         anno_txt = os.path.join(output_path, img_name.split(".")[0] + ".txt")
+72         with open(anno_txt, "w") as f:
+73             for anno in anno_in_image:
+74                 category = anno["category_id"]
+75                 bbox_COCO = anno["bbox"]
+76                 x, y, w, h = convert_bbox_coco2yolo(img_width, img_height, bbox_COCO)
+77                 f.write(f"{int(category)-1} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+78 
+79     print("Converting COCO Json to YOLO txt finished!")
+80 
+81 def main():
+82     convert_coco_json_to_yolo_txt("output", "train_gt.json")
+83 
+84 
+85 if __name__ == "__main__":
+86     main()
+
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
+1 import os
+2 import sys
+3 from pathlib import Path
+4 from turtle import width
+5 import cv2 
+6 import torch
+7 import torch.backends.cudnn as cudnn
+8 from utils.augmentations import letterbox
+9 from utils.general import non_max_suppression, scale_coords, xyxy2xywh
+10 from utils.torch_utils import select_device, time_sync
+11 import numpy as np
+12 
+13 from models.common import DetectMultiBackend
+14 weights = "runs/train/exp8/weights/best.pt"
+15 test_img = 'as.jpeg'
+16 data = 'data/custom.yaml'
+17 
+18 
+19 def convert_mid_to_corner(x,y,w,h):
+20     x1 = (x-(w/2))
+21     y1 = (y-(h/2))
+22     x2 = x1 + w
+23     y2 = y1 + h
+24     return [x1,y1,x2,y2]
+25 
+26 def convert_to_int(width, height,line_point):
+27     x1,y1,x2,y2 = line_point
+28     x1 = int(x1*width)
+29     x2 = int(x2*width)
+30     y1 = int(y1*height)
+31     y2 = int(y2*height)
+32     return x1, y1, x2, y2
+33 
+34 if __name__ == "__main__":
+35     device = select_device('0')
+36     model = DetectMultiBackend(weights, device=device, dnn=False, data=data, fp16=False)
+37     img = cv2.imread(test_img)
+38     img0 = cv2.imread(test_img)
+39     print(img0.shape)
+40     height, width, _  = img0.shape
+41     gn = torch.tensor(img.shape)[[1, 0, 1, 0]]
+42     img = img.reshape(1,988,1280,3)
+43     img = img.transpose((0,3,1,2))
+44     img = img/255.0
+45     img = torch.from_numpy(img).to(device).float()
+46     pred = model(img,augment=False, visualize=False)
+47     pred = non_max_suppression(pred, 0.9, 0.45, None, True, max_det=1000)
+48     # Blue color in BGR
+49     color = (255, 0, 0)
+50 
+51     # Line thickness of 2 px
+52     thickness = 40
+53     for i, det in enumerate(pred):
+54         for *xyxy, conf, cls in reversed(det):
+55             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+56             line = (cls, *xywh)  # label format
+57             x,y,w,h = line[1], line[2], line[3], line[4]
+58             print(x,y,w,h )
+59             line_point = convert_mid_to_corner(x,y,w,h)
+60             print(line_point)
+61             x1,y1,x2,y2 = convert_to_int(width, height,line_point)
+62             print(x1,y1,x2,y2)
+63             cv2.rectangle(img0,(x1, y1), (x2, y2),color,thickness)
+64             cv2.imshow('test',img0)
+65             cv2.waitKey(0)
+
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/split_maker.py
+1 import os
+2 from random import shuffle
+3 import sys
+4 def create_split(split, img_dir):
+5     images = [x for x in os.listdir(img_dir) if not x.endswith('.txt')]
+6     
+7     shuffle(images)
+8     train_size = int(len(images)*split)
+9     test_size = len(images) - train_size
+10     val_size = test_size//2
+11     train_data = images[:train_size]
+12     test_data = images[train_size:train_size+val_size]
+13     val_data = images[train_size+val_size:]
+14     print(f"Train size samples: {train_size}") 
+15     print(f"Test size  samples: {test_size}") 
+16     print(f"validation  size samples: {val_size}") 
+17 
+18     write_file('train',train_data, img_dir)
+19     write_file('test',test_data, img_dir)
+20     write_file('valid',val_data, img_dir)
+21 
+22 def write_file(split_type,images, img_dir):
+23     with open(split_type+'.txt','w') as fp:
+24         for image in images:
+25             fp.write(f'data/{img_dir}/{image}\n')
+26         
+27 
+28 
+29 def main():
+30     split = float(sys.argv[1])
+31     img_dir = sys.argv[2]
+32     create_split(split,img_dir)
+33 
+34 if __name__ == "__main__":
+35     main()
+
+```
+
+================================ Human Message =================================
+
+[{'type': 'text', 'text': 'Request: NEW PROMPT\nChange the line thickness back to 20, and also change the function make_folders(path="output") to have a default value of "out_folders" in the converter file\n'}]
+
+================================== Ai Message ==================================
+
+To address the requested changes, I will modify the `make_folders` function in the `convertor.py` file to have a default value of `"out_folders"` for the `path` parameter. Additionally, I will change the line thickness from 40 to 20 in the `custom_detect.py` file.
+
+Here are the diffs for the requested changes:
+
+```diff
+--- /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/convertor.py
++++ /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/convertor.py
+@@ -6,3 +6,3 @@
+-    def make_folders(path="output"):
++    def make_folders(path="out_folders"):
+         if os.path.exists(path):
+```
+
+```diff
+--- /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
++++ /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
+@@ -52,3 +52,3 @@
+-    thickness = 40
++    thickness = 20
+     for i, det in enumerate(pred):
+```
+
+These changes will update the default output folder for the `make_folders` function and adjust the line thickness for drawing bounding boxes in the detection visualization.

@@ -3,7 +3,7 @@ import json
 from tqdm import tqdm
 import shutil
 
-def make_folders(path="output"):
+    def make_folders(path="out_folders"):
     if os.path.exists(path):
         shutil.rmtree(path)
     os.makedirs(path)

@@ -649,3 +649,205 @@ please change the line thickness to 40 in the custom dataset file
 
 CONSOLE OUTPUT:
 
+
+2024-05-11T10:08:53.811832
+UPLOADED FILES:
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/convertor.py
+import os
+import json
+from tqdm import tqdm
+import shutil
+
+def make_folders(path="output"):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path)
+    return path
+    
+def convert_bbox_coco2yolo(img_width, img_height, bbox):
+    """
+    Convert bounding box from COCO  format to YOLO format
+
+    Parameters
+    ----------
+    img_width : int
+        width of image
+    img_height : int
+        height of image
+    bbox : list[int]
+        bounding box annotation in COCO format: 
+        [top left x position, top left y position, width, height]
+
+    Returns
+    -------
+    list[float]
+        bounding box annotation in YOLO format: 
+        [x_center_rel, y_center_rel, width_rel, height_rel]
+    """
+    
+    # YOLO bounding box format: [x_center, y_center, width, height]
+    # (float values relative to width and height of image)
+    x_tl, y_tl, w, h = bbox
+
+    dw = 1.0 / img_width
+    dh = 1.0 / img_height
+
+    x_center = x_tl + w / 2.0
+    y_center = y_tl + h / 2.0
+
+    x = x_center * dw
+    y = y_center * dh
+    w = w * dw
+    h = h * dh
+
+    return [x, y, w, h]
+
+def convert_coco_json_to_yolo_txt(output_path, json_file):
+
+    path = make_folders(output_path)
+
+    with open(json_file) as f:
+        json_data = json.load(f)
+
+    # write _darknet.labels, which holds names of all classes (one class per line)
+    label_file = os.path.join(output_path, "_darknet.labels")
+    with open(label_file, "w") as f:
+        for category in tqdm(json_data["categories"], desc="Categories"):
+            category_name = category["name"]
+            f.write(f"{category_name}\n")
+
+    for image in tqdm(json_data["images"], desc="Annotation txt for each iamge"):
+        img_id = image["id"]
+        img_name = image["file_name"]
+        img_width = image["width"]
+        img_height = image["height"]
+
+        anno_in_image = [anno for anno in json_data["annotations"] if anno["image_id"] == img_id]
+        anno_txt = os.path.join(output_path, img_name.split(".")[0] + ".txt")
+        with open(anno_txt, "w") as f:
+            for anno in anno_in_image:
+                category = anno["category_id"]
+                bbox_COCO = anno["bbox"]
+                x, y, w, h = convert_bbox_coco2yolo(img_width, img_height, bbox_COCO)
+                f.write(f"{int(category)-1} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+
+    print("Converting COCO Json to YOLO txt finished!")
+
+def main():
+    convert_coco_json_to_yolo_txt("output", "train_gt.json")
+
+
+if __name__ == "__main__":
+    main()
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
+import os
+import sys
+from pathlib import Path
+from turtle import width
+import cv2 
+import torch
+import torch.backends.cudnn as cudnn
+from utils.augmentations import letterbox
+from utils.general import non_max_suppression, scale_coords, xyxy2xywh
+from utils.torch_utils import select_device, time_sync
+import numpy as np
+
+from models.common import DetectMultiBackend
+weights = "runs/train/exp8/weights/best.pt"
+test_img = 'as.jpeg'
+data = 'data/custom.yaml'
+
+
+def convert_mid_to_corner(x,y,w,h):
+    x1 = (x-(w/2))
+    y1 = (y-(h/2))
+    x2 = x1 + w
+    y2 = y1 + h
+    return [x1,y1,x2,y2]
+
+def convert_to_int(width, height,line_point):
+    x1,y1,x2,y2 = line_point
+    x1 = int(x1*width)
+    x2 = int(x2*width)
+    y1 = int(y1*height)
+    y2 = int(y2*height)
+    return x1, y1, x2, y2
+
+if __name__ == "__main__":
+    device = select_device('0')
+    model = DetectMultiBackend(weights, device=device, dnn=False, data=data, fp16=False)
+    img = cv2.imread(test_img)
+    img0 = cv2.imread(test_img)
+    print(img0.shape)
+    height, width, _  = img0.shape
+    gn = torch.tensor(img.shape)[[1, 0, 1, 0]]
+    img = img.reshape(1,988,1280,3)
+    img = img.transpose((0,3,1,2))
+    img = img/255.0
+    img = torch.from_numpy(img).to(device).float()
+    pred = model(img,augment=False, visualize=False)
+    pred = non_max_suppression(pred, 0.9, 0.45, None, True, max_det=1000)
+    # Blue color in BGR
+    color = (255, 0, 0)
+
+    # Line thickness of 2 px
+    thickness = 40
+    for i, det in enumerate(pred):
+        for *xyxy, conf, cls in reversed(det):
+            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+            line = (cls, *xywh)  # label format
+            x,y,w,h = line[1], line[2], line[3], line[4]
+            print(x,y,w,h )
+            line_point = convert_mid_to_corner(x,y,w,h)
+            print(line_point)
+            x1,y1,x2,y2 = convert_to_int(width, height,line_point)
+            print(x1,y1,x2,y2)
+            cv2.rectangle(img0,(x1, y1), (x2, y2),color,thickness)
+            cv2.imshow('test',img0)
+            cv2.waitKey(0)
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/split_maker.py
+import os
+from random import shuffle
+import sys
+def create_split(split, img_dir):
+    images = [x for x in os.listdir(img_dir) if not x.endswith('.txt')]
+    
+    shuffle(images)
+    train_size = int(len(images)*split)
+    test_size = len(images) - train_size
+    val_size = test_size//2
+    train_data = images[:train_size]
+    test_data = images[train_size:train_size+val_size]
+    val_data = images[train_size+val_size:]
+    print(f"Train size samples: {train_size}") 
+    print(f"Test size  samples: {test_size}") 
+    print(f"validation  size samples: {val_size}") 
+
+    write_file('train',train_data, img_dir)
+    write_file('test',test_data, img_dir)
+    write_file('valid',val_data, img_dir)
+
+def write_file(split_type,images, img_dir):
+    with open(split_type+'.txt','w') as fp:
+        for image in images:
+            fp.write(f'data/{img_dir}/{image}\n')
+        
+
+
+def main():
+    split = float(sys.argv[1])
+    img_dir = sys.argv[2]
+    create_split(split,img_dir)
+
+if __name__ == "__main__":
+    main()
+
+PROMPT:
+NEW PROMPT
+Change the line thickness back to 20, and also change the function make_folders(path="output") to have a default value of "out_folders" in the converter file
+
+
+2024-05-11T10:09:04.149584
+
+CONSOLE OUTPUT:
+
