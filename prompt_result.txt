@@ -1,0 +1,11 @@
+/gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py:/n [38;5;202m--- [0m
+[92m+++ [0m
+@@ -49,7 +49,7 @@
+     color = (255, 0, 0)
+ 
+     # Line thickness of 2 px
+[38;5;202m-    thickness = 2[0m
+[92m+    thickness = 40[0m
+     for i, det in enumerate(pred):
+         for *xyxy, conf, cls in reversed(det):
+             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh

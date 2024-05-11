@@ -1,0 +1,737 @@
+
+2024-05-11T10:06:23.695180
+================================ System Message ================================
+
+You will get instructions for code to write.
+You will write a very long answer. Make sure that every detail of the architecture is, in the end, implemented as code.
+Think step by step and reason yourself to the correct decisions to make sure we get it right.
+Make changes to existing code and implement new code in the unified git diff syntax. When implementing new code, First lay out the names of the core classes, functions, methods that will be necessary, As well as a quick comment on their purpose.
+
+You will output the content of each file necessary to achieve the goal, including ALL code.
+Output requested code changes and new code in the unified "git diff" syntax. Example:
+
+```diff
+--- example.txt
++++ example.txt
+@@ -6,3 +6,4 @@
+     line content A
+     line content B
++    new line added
+-    original line X
++    modified line X with changes
+@@ -26,4 +27,5 @@
+         condition check:
+-            action for condition A
++            if certain condition is met:
++                alternative action for condition A
+         another condition check:
+-            action for condition B
++            modified action for condition B
+```
+
+Example of a git diff creating a new file:
+
+```diff
+--- /dev/null
++++ new_file.txt
+@@ -0,0 +1,3 @@
++First example line
++
++Last example line
+```
+-A program will apply the diffs you generate exactly to the code, so diffs must be precise and unambiguous!
+-Every diff must be fenced with triple backtick ```.
+-The file names at the beginning of a diff, (lines starting with --- and +++) is the relative path to the file before and after the diff.
+-LINES TO BE REMOVED (starting with single -) AND LINES TO BE RETAIN (no starting symbol) HAVE TO REPLICATE THE DIFFED HUNK OF THE CODE EXACTLY LINE BY LINE. KEEP THE NUMBER OF RETAIN LINES SMALL IF POSSIBLE.
+-EACH LINE IN THE SOURCE FILES STARTS WITH A LINE NUMBER, WHICH IS NOT PART OF THE SOURCE CODE. NEVER TRANSFER THESE LINE NUMBERS TO THE DIFF HUNKS.
+-AVOID STARTING A HUNK WITH AN EMPTY LINE.
+-ALL DIFFS WILL BE APPLIED SIMULTANEOUSLY, AVOID SEQUENTIAL HUNKS.
+
+
+As far as compatible with the user request, start with the "entrypoint" file, then go to the ones that are imported by that file, and so on.
+Please note that the code should be fully functional. No placeholders.
+
+Follow a language and framework appropriate best practice file naming convention.
+Make sure that files contain all imports, types etc.  The code should be fully functional. Make sure that code in different files are compatible with each other.
+Ensure to implement all code, if you are unsure, write a plausible implementation.
+Include module dependency or package manager dependency definition file.
+Before you finish, double check that all parts of the architecture is present in the files.
+
+When you are done, write finish with "this concludes a fully working implementation".
+
+Useful to know:
+Almost always put different classes in different files.
+Always use the programming language the user asks for.
+For Python, you always create an appropriate requirements.txt file.
+For NodeJS, you always create an appropriate package.json file.
+Always add a comment briefly describing the purpose of the function definition.
+Add comments explaining very complex bits of logic.
+Always follow the best practices for the requested languages for folder/file structure and how to package the project.
+
+
+Python toolbelt preferences:
+- pytest
+- dataclasses
+
+
+================================ Human Message =================================
+
+```
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
+1 import os
+2 import sys
+3 from pathlib import Path
+4 from turtle import width
+5 import cv2 
+6 import torch
+7 import torch.backends.cudnn as cudnn
+8 from utils.augmentations import letterbox
+9 from utils.general import non_max_suppression, scale_coords, xyxy2xywh
+10 from utils.torch_utils import select_device, time_sync
+11 import numpy as np
+12 
+13 from models.common import DetectMultiBackend
+14 weights = "runs/train/exp8/weights/best.pt"
+15 test_img = 'as.jpeg'
+16 data = 'data/custom.yaml'
+17 
+18 
+19 def convert_mid_to_corner(x,y,w,h):
+20     x1 = (x-(w/2))
+21     y1 = (y-(h/2))
+22     x2 = x1 + w
+23     y2 = y1 + h
+24     return [x1,y1,x2,y2]
+25 
+26 def convert_to_int(width, height,line_point):
+27     x1,y1,x2,y2 = line_point
+28     x1 = int(x1*width)
+29     x2 = int(x2*width)
+30     y1 = int(y1*height)
+31     y2 = int(y2*height)
+32     return x1, y1, x2, y2
+33 
+34 if __name__ == "__main__":
+35     device = select_device('0')
+36     model = DetectMultiBackend(weights, device=device, dnn=False, data=data, fp16=False)
+37     img = cv2.imread(test_img)
+38     img0 = cv2.imread(test_img)
+39     print(img0.shape)
+40     height, width, _  = img0.shape
+41     gn = torch.tensor(img.shape)[[1, 0, 1, 0]]
+42     img = img.reshape(1,988,1280,3)
+43     img = img.transpose((0,3,1,2))
+44     img = img/255.0
+45     img = torch.from_numpy(img).to(device).float()
+46     pred = model(img,augment=False, visualize=False)
+47     pred = non_max_suppression(pred, 0.9, 0.45, None, True, max_det=1000)
+48     # Blue color in BGR
+49     color = (255, 0, 0)
+50 
+51     # Line thickness of 2 px
+52     thickness = 2
+53     for i, det in enumerate(pred):
+54         for *xyxy, conf, cls in reversed(det):
+55             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+56             line = (cls, *xywh)  # label format
+57             x,y,w,h = line[1], line[2], line[3], line[4]
+58             print(x,y,w,h )
+59             line_point = convert_mid_to_corner(x,y,w,h)
+60             print(line_point)
+61             x1,y1,x2,y2 = convert_to_int(width, height,line_point)
+62             print(x1,y1,x2,y2)
+63             cv2.rectangle(img0,(x1, y1), (x2, y2),color,thickness)
+64             cv2.imshow('test',img0)
+65             cv2.waitKey(0)
+
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/models/tf.py
+1 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+2 """
+3 TensorFlow, Keras and TFLite versions of YOLOv5
+4 Authored by https://github.com/zldrobit in PR https://github.com/ultralytics/yolov5/pull/1127
+5 
+6 Usage:
+7     $ python models/tf.py --weights yolov5s.pt
+8 
+9 Export:
+10     $ python path/to/export.py --weights yolov5s.pt --include saved_model pb tflite tfjs
+11 """
+12 
+13 import argparse
+14 import sys
+15 from copy import deepcopy
+16 from pathlib import Path
+17 
+18 FILE = Path(__file__).resolve()
+19 ROOT = FILE.parents[1]  # YOLOv5 root directory
+20 if str(ROOT) not in sys.path:
+21     sys.path.append(str(ROOT))  # add ROOT to PATH
+22 # ROOT = ROOT.relative_to(Path.cwd())  # relative
+23 
+24 import numpy as np
+25 import tensorflow as tf
+26 import torch
+27 import torch.nn as nn
+28 from tensorflow import keras
+29 
+30 from models.common import C3, SPP, SPPF, Bottleneck, BottleneckCSP, Concat, Conv, DWConv, Focus, autopad
+31 from models.experimental import CrossConv, MixConv2d, attempt_load
+32 from models.yolo import Detect
+33 from utils.activations import SiLU
+34 from utils.general import LOGGER, make_divisible, print_args
+35 
+36 
+37 class TFBN(keras.layers.Layer):
+38     # TensorFlow BatchNormalization wrapper
+39     def __init__(self, w=None):
+40         super().__init__()
+41         self.bn = keras.layers.BatchNormalization(
+42             beta_initializer=keras.initializers.Constant(w.bias.numpy()),
+43             gamma_initializer=keras.initializers.Constant(w.weight.numpy()),
+44             moving_mean_initializer=keras.initializers.Constant(w.running_mean.numpy()),
+45             moving_variance_initializer=keras.initializers.Constant(w.running_var.numpy()),
+46             epsilon=w.eps)
+47 
+48     def call(self, inputs):
+49         return self.bn(inputs)
+50 
+51 
+52 class TFPad(keras.layers.Layer):
+53 
+54     def __init__(self, pad):
+55         super().__init__()
+56         self.pad = tf.constant([[0, 0], [pad, pad], [pad, pad], [0, 0]])
+57 
+58     def call(self, inputs):
+59         return tf.pad(inputs, self.pad, mode='constant', constant_values=0)
+60 
+61 
+62 class TFConv(keras.layers.Layer):
+63     # Standard convolution
+64     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True, w=None):
+65         # ch_in, ch_out, weights, kernel, stride, padding, groups
+66         super().__init__()
+67         assert g == 1, "TF v2.2 Conv2D does not support 'groups' argument"
+68         assert isinstance(k, int), "Convolution with multiple kernels are not allowed."
+69         # TensorFlow convolution padding is inconsistent with PyTorch (e.g. k=3 s=2 'SAME' padding)
+70         # see https://stackoverflow.com/questions/52975843/comparing-conv2d-with-padding-between-tensorflow-and-pytorch
+71 
+72         conv = keras.layers.Conv2D(
+73             c2,
+74             k,
+75             s,
+76             'SAME' if s == 1 else 'VALID',
+77             use_bias=False if hasattr(w, 'bn') else True,
+78             kernel_initializer=keras.initializers.Constant(w.conv.weight.permute(2, 3, 1, 0).numpy()),
+79             bias_initializer='zeros' if hasattr(w, 'bn') else keras.initializers.Constant(w.conv.bias.numpy()))
+80         self.conv = conv if s == 1 else keras.Sequential([TFPad(autopad(k, p)), conv])
+81         self.bn = TFBN(w.bn) if hasattr(w, 'bn') else tf.identity
+82 
+83         # YOLOv5 activations
+84         if isinstance(w.act, nn.LeakyReLU):
+85             self.act = (lambda x: keras.activations.relu(x, alpha=0.1)) if act else tf.identity
+86         elif isinstance(w.act, nn.Hardswish):
+87             self.act = (lambda x: x * tf.nn.relu6(x + 3) * 0.166666667) if act else tf.identity
+88         elif isinstance(w.act, (nn.SiLU, SiLU)):
+89             self.act = (lambda x: keras.activations.swish(x)) if act else tf.identity
+90         else:
+91             raise Exception(f'no matching TensorFlow activation found for {w.act}')
+92 
+93     def call(self, inputs):
+94         return self.act(self.bn(self.conv(inputs)))
+95 
+96 
+97 class TFFocus(keras.layers.Layer):
+98     # Focus wh information into c-space
+99     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True, w=None):
+100         # ch_in, ch_out, kernel, stride, padding, groups
+101         super().__init__()
+102         self.conv = TFConv(c1 * 4, c2, k, s, p, g, act, w.conv)
+103 
+104     def call(self, inputs):  # x(b,w,h,c) -> y(b,w/2,h/2,4c)
+105         # inputs = inputs / 255  # normalize 0-255 to 0-1
+106         return self.conv(
+107             tf.concat(
+108                 [inputs[:, ::2, ::2, :], inputs[:, 1::2, ::2, :], inputs[:, ::2, 1::2, :], inputs[:, 1::2, 1::2, :]],
+109                 3))
+110 
+111 
+112 class TFBottleneck(keras.layers.Layer):
+113     # Standard bottleneck
+114     def __init__(self, c1, c2, shortcut=True, g=1, e=0.5, w=None):  # ch_in, ch_out, shortcut, groups, expansion
+115         super().__init__()
+116         c_ = int(c2 * e)  # hidden channels
+117         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+118         self.cv2 = TFConv(c_, c2, 3, 1, g=g, w=w.cv2)
+119         self.add = shortcut and c1 == c2
+120 
+121     def call(self, inputs):
+122         return inputs + self.cv2(self.cv1(inputs)) if self.add else self.cv2(self.cv1(inputs))
+123 
+124 
+125 class TFConv2d(keras.layers.Layer):
+126     # Substitution for PyTorch nn.Conv2D
+127     def __init__(self, c1, c2, k, s=1, g=1, bias=True, w=None):
+128         super().__init__()
+129         assert g == 1, "TF v2.2 Conv2D does not support 'groups' argument"
+130         self.conv = keras.layers.Conv2D(
+131             c2,
+132             k,
+133             s,
+134             'VALID',
+135             use_bias=bias,
+136             kernel_initializer=keras.initializers.Constant(w.weight.permute(2, 3, 1, 0).numpy()),
+137             bias_initializer=keras.initializers.Constant(w.bias.numpy()) if bias else None,
+138         )
+139 
+140     def call(self, inputs):
+141         return self.conv(inputs)
+142 
+143 
+144 class TFBottleneckCSP(keras.layers.Layer):
+145     # CSP Bottleneck https://github.com/WongKinYiu/CrossStagePartialNetworks
+146     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5, w=None):
+147         # ch_in, ch_out, number, shortcut, groups, expansion
+148         super().__init__()
+149         c_ = int(c2 * e)  # hidden channels
+150         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+151         self.cv2 = TFConv2d(c1, c_, 1, 1, bias=False, w=w.cv2)
+152         self.cv3 = TFConv2d(c_, c_, 1, 1, bias=False, w=w.cv3)
+153         self.cv4 = TFConv(2 * c_, c2, 1, 1, w=w.cv4)
+154         self.bn = TFBN(w.bn)
+155         self.act = lambda x: keras.activations.swish(x)
+156         self.m = keras.Sequential([TFBottleneck(c_, c_, shortcut, g, e=1.0, w=w.m[j]) for j in range(n)])
+157 
+158     def call(self, inputs):
+159         y1 = self.cv3(self.m(self.cv1(inputs)))
+160         y2 = self.cv2(inputs)
+161         return self.cv4(self.act(self.bn(tf.concat((y1, y2), axis=3))))
+162 
+163 
+164 class TFC3(keras.layers.Layer):
+165     # CSP Bottleneck with 3 convolutions
+166     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5, w=None):
+167         # ch_in, ch_out, number, shortcut, groups, expansion
+168         super().__init__()
+169         c_ = int(c2 * e)  # hidden channels
+170         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+171         self.cv2 = TFConv(c1, c_, 1, 1, w=w.cv2)
+172         self.cv3 = TFConv(2 * c_, c2, 1, 1, w=w.cv3)
+173         self.m = keras.Sequential([TFBottleneck(c_, c_, shortcut, g, e=1.0, w=w.m[j]) for j in range(n)])
+174 
+175     def call(self, inputs):
+176         return self.cv3(tf.concat((self.m(self.cv1(inputs)), self.cv2(inputs)), axis=3))
+177 
+178 
+179 class TFSPP(keras.layers.Layer):
+180     # Spatial pyramid pooling layer used in YOLOv3-SPP
+181     def __init__(self, c1, c2, k=(5, 9, 13), w=None):
+182         super().__init__()
+183         c_ = c1 // 2  # hidden channels
+184         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+185         self.cv2 = TFConv(c_ * (len(k) + 1), c2, 1, 1, w=w.cv2)
+186         self.m = [keras.layers.MaxPool2D(pool_size=x, strides=1, padding='SAME') for x in k]
+187 
+188     def call(self, inputs):
+189         x = self.cv1(inputs)
+190         return self.cv2(tf.concat([x] + [m(x) for m in self.m], 3))
+191 
+192 
+193 class TFSPPF(keras.layers.Layer):
+194     # Spatial pyramid pooling-Fast layer
+195     def __init__(self, c1, c2, k=5, w=None):
+196         super().__init__()
+197         c_ = c1 // 2  # hidden channels
+198         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+199         self.cv2 = TFConv(c_ * 4, c2, 1, 1, w=w.cv2)
+200         self.m = keras.layers.MaxPool2D(pool_size=k, strides=1, padding='SAME')
+201 
+202     def call(self, inputs):
+203         x = self.cv1(inputs)
+204         y1 = self.m(x)
+205         y2 = self.m(y1)
+206         return self.cv2(tf.concat([x, y1, y2, self.m(y2)], 3))
+207 
+208 
+209 class TFDetect(keras.layers.Layer):
+210     # TF YOLOv5 Detect layer
+211     def __init__(self, nc=80, anchors=(), ch=(), imgsz=(640, 640), w=None):  # detection layer
+212         super().__init__()
+213         self.stride = tf.convert_to_tensor(w.stride.numpy(), dtype=tf.float32)
+214         self.nc = nc  # number of classes
+215         self.no = nc + 5  # number of outputs per anchor
+216         self.nl = len(anchors)  # number of detection layers
+217         self.na = len(anchors[0]) // 2  # number of anchors
+218         self.grid = [tf.zeros(1)] * self.nl  # init grid
+219         self.anchors = tf.convert_to_tensor(w.anchors.numpy(), dtype=tf.float32)
+220         self.anchor_grid = tf.reshape(self.anchors * tf.reshape(self.stride, [self.nl, 1, 1]), [self.nl, 1, -1, 1, 2])
+221         self.m = [TFConv2d(x, self.no * self.na, 1, w=w.m[i]) for i, x in enumerate(ch)]
+222         self.training = False  # set to False after building model
+223         self.imgsz = imgsz
+224         for i in range(self.nl):
+225             ny, nx = self.imgsz[0] // self.stride[i], self.imgsz[1] // self.stride[i]
+226             self.grid[i] = self._make_grid(nx, ny)
+227 
+228     def call(self, inputs):
+229         z = []  # inference output
+230         x = []
+231         for i in range(self.nl):
+232             x.append(self.m[i](inputs[i]))
+233             # x(bs,20,20,255) to x(bs,3,20,20,85)
+234             ny, nx = self.imgsz[0] // self.stride[i], self.imgsz[1] // self.stride[i]
+235             x[i] = tf.reshape(x[i], [-1, ny * nx, self.na, self.no])
+236 
+237             if not self.training:  # inference
+238                 y = tf.sigmoid(x[i])
+239                 grid = tf.transpose(self.grid[i], [0, 2, 1, 3]) - 0.5
+240                 anchor_grid = tf.transpose(self.anchor_grid[i], [0, 2, 1, 3]) * 4
+241                 xy = (y[..., 0:2] * 2 + grid) * self.stride[i]  # xy
+242                 wh = y[..., 2:4] ** 2 * anchor_grid
+243                 # Normalize xywh to 0-1 to reduce calibration error
+244                 xy /= tf.constant([[self.imgsz[1], self.imgsz[0]]], dtype=tf.float32)
+245                 wh /= tf.constant([[self.imgsz[1], self.imgsz[0]]], dtype=tf.float32)
+246                 y = tf.concat([xy, wh, y[..., 4:]], -1)
+247                 z.append(tf.reshape(y, [-1, self.na * ny * nx, self.no]))
+248 
+249         return tf.transpose(x, [0, 2, 1, 3]) if self.training else (tf.concat(z, 1), x)
+250 
+251     @staticmethod
+252     def _make_grid(nx=20, ny=20):
+253         # yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+254         # return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+255         xv, yv = tf.meshgrid(tf.range(nx), tf.range(ny))
+256         return tf.cast(tf.reshape(tf.stack([xv, yv], 2), [1, 1, ny * nx, 2]), dtype=tf.float32)
+257 
+258 
+259 class TFUpsample(keras.layers.Layer):
+260     # TF version of torch.nn.Upsample()
+261     def __init__(self, size, scale_factor, mode, w=None):  # warning: all arguments needed including 'w'
+262         super().__init__()
+263         assert scale_factor == 2, "scale_factor must be 2"
+264         self.upsample = lambda x: tf.image.resize(x, (x.shape[1] * 2, x.shape[2] * 2), method=mode)
+265         # self.upsample = keras.layers.UpSampling2D(size=scale_factor, interpolation=mode)
+266         # with default arguments: align_corners=False, half_pixel_centers=False
+267         # self.upsample = lambda x: tf.raw_ops.ResizeNearestNeighbor(images=x,
+268         #                                                            size=(x.shape[1] * 2, x.shape[2] * 2))
+269 
+270     def call(self, inputs):
+271         return self.upsample(inputs)
+272 
+273 
+274 class TFConcat(keras.layers.Layer):
+275     # TF version of torch.concat()
+276     def __init__(self, dimension=1, w=None):
+277         super().__init__()
+278         assert dimension == 1, "convert only NCHW to NHWC concat"
+279         self.d = 3
+280 
+281     def call(self, inputs):
+282         return tf.concat(inputs, self.d)
+283 
+284 
+285 def parse_model(d, ch, model, imgsz):  # model_dict, input_channels(3)
+286     LOGGER.info(f"\n{'':>3}{'from':>18}{'n':>3}{'params':>10}  {'module':<40}{'arguments':<30}")
+287     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
+288     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
+289     no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
+290 
+291     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
+292     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
+293         m_str = m
+294         m = eval(m) if isinstance(m, str) else m  # eval strings
+295         for j, a in enumerate(args):
+296             try:
+297                 args[j] = eval(a) if isinstance(a, str) else a  # eval strings
+298             except NameError:
+299                 pass
+300 
+301         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
+302         if m in [nn.Conv2d, Conv, Bottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+303             c1, c2 = ch[f], args[0]
+304             c2 = make_divisible(c2 * gw, 8) if c2 != no else c2
+305 
+306             args = [c1, c2, *args[1:]]
+307             if m in [BottleneckCSP, C3]:
+308                 args.insert(2, n)
+309                 n = 1
+310         elif m is nn.BatchNorm2d:
+311             args = [ch[f]]
+312         elif m is Concat:
+313             c2 = sum(ch[-1 if x == -1 else x + 1] for x in f)
+314         elif m is Detect:
+315             args.append([ch[x + 1] for x in f])
+316             if isinstance(args[1], int):  # number of anchors
+317                 args[1] = [list(range(args[1] * 2))] * len(f)
+318             args.append(imgsz)
+319         else:
+320             c2 = ch[f]
+321 
+322         tf_m = eval('TF' + m_str.replace('nn.', ''))
+323         m_ = keras.Sequential([tf_m(*args, w=model.model[i][j]) for j in range(n)]) if n > 1 \
+324             else tf_m(*args, w=model.model[i])  # module
+325 
+326         torch_m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+327         t = str(m)[8:-2].replace('__main__.', '')  # module type
+328         np = sum(x.numel() for x in torch_m_.parameters())  # number params
+329         m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
+330         LOGGER.info(f'{i:>3}{str(f):>18}{str(n):>3}{np:>10}  {t:<40}{str(args):<30}')  # print
+331         save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
+332         layers.append(m_)
+333         ch.append(c2)
+334     return keras.Sequential(layers), sorted(save)
+335 
+336 
+337 class TFModel:
+338     # TF YOLOv5 model
+339     def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None, model=None, imgsz=(640, 640)):  # model, channels, classes
+340         super().__init__()
+341         if isinstance(cfg, dict):
+342             self.yaml = cfg  # model dict
+343         else:  # is *.yaml
+344             import yaml  # for torch hub
+345             self.yaml_file = Path(cfg).name
+346             with open(cfg) as f:
+347                 self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
+348 
+349         # Define model
+350         if nc and nc != self.yaml['nc']:
+351             LOGGER.info(f"Overriding {cfg} nc={self.yaml['nc']} with nc={nc}")
+352             self.yaml['nc'] = nc  # override yaml value
+353         self.model, self.savelist = parse_model(deepcopy(self.yaml), ch=[ch], model=model, imgsz=imgsz)
+354 
+355     def predict(self,
+356                 inputs,
+357                 tf_nms=False,
+358                 agnostic_nms=False,
+359                 topk_per_class=100,
+360                 topk_all=100,
+361                 iou_thres=0.45,
+362                 conf_thres=0.25):
+363         y = []  # outputs
+364         x = inputs
+365         for i, m in enumerate(self.model.layers):
+366             if m.f != -1:  # if not from previous layer
+367                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
+368 
+369             x = m(x)  # run
+370             y.append(x if m.i in self.savelist else None)  # save output
+371 
+372         # Add TensorFlow NMS
+373         if tf_nms:
+374             boxes = self._xywh2xyxy(x[0][..., :4])
+375             probs = x[0][:, :, 4:5]
+376             classes = x[0][:, :, 5:]
+377             scores = probs * classes
+378             if agnostic_nms:
+379                 nms = AgnosticNMS()((boxes, classes, scores), topk_all, iou_thres, conf_thres)
+380                 return nms, x[1]
+381             else:
+382                 boxes = tf.expand_dims(boxes, 2)
+383                 nms = tf.image.combined_non_max_suppression(boxes,
+384                                                             scores,
+385                                                             topk_per_class,
+386                                                             topk_all,
+387                                                             iou_thres,
+388                                                             conf_thres,
+389                                                             clip_boxes=False)
+390                 return nms, x[1]
+391 
+392         return x[0]  # output only first tensor [1,6300,85] = [xywh, conf, class0, class1, ...]
+393         # x = x[0][0]  # [x(1,6300,85), ...] to x(6300,85)
+394         # xywh = x[..., :4]  # x(6300,4) boxes
+395         # conf = x[..., 4:5]  # x(6300,1) confidences
+396         # cls = tf.reshape(tf.cast(tf.argmax(x[..., 5:], axis=1), tf.float32), (-1, 1))  # x(6300,1)  classes
+397         # return tf.concat([conf, cls, xywh], 1)
+398 
+399     @staticmethod
+400     def _xywh2xyxy(xywh):
+401         # Convert nx4 boxes from [x, y, w, h] to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
+402         x, y, w, h = tf.split(xywh, num_or_size_splits=4, axis=-1)
+403         return tf.concat([x - w / 2, y - h / 2, x + w / 2, y + h / 2], axis=-1)
+404 
+405 
+406 class AgnosticNMS(keras.layers.Layer):
+407     # TF Agnostic NMS
+408     def call(self, input, topk_all, iou_thres, conf_thres):
+409         # wrap map_fn to avoid TypeSpec related error https://stackoverflow.com/a/65809989/3036450
+410         return tf.map_fn(lambda x: self._nms(x, topk_all, iou_thres, conf_thres),
+411                          input,
+412                          fn_output_signature=(tf.float32, tf.float32, tf.float32, tf.int32),
+413                          name='agnostic_nms')
+414 
+415     @staticmethod
+416     def _nms(x, topk_all=100, iou_thres=0.45, conf_thres=0.25):  # agnostic NMS
+417         boxes, classes, scores = x
+418         class_inds = tf.cast(tf.argmax(classes, axis=-1), tf.float32)
+419         scores_inp = tf.reduce_max(scores, -1)
+420         selected_inds = tf.image.non_max_suppression(boxes,
+421                                                      scores_inp,
+422                                                      max_output_size=topk_all,
+423                                                      iou_threshold=iou_thres,
+424                                                      score_threshold=conf_thres)
+425         selected_boxes = tf.gather(boxes, selected_inds)
+426         padded_boxes = tf.pad(selected_boxes,
+427                               paddings=[[0, topk_all - tf.shape(selected_boxes)[0]], [0, 0]],
+428                               mode="CONSTANT",
+429                               constant_values=0.0)
+430         selected_scores = tf.gather(scores_inp, selected_inds)
+431         padded_scores = tf.pad(selected_scores,
+432                                paddings=[[0, topk_all - tf.shape(selected_boxes)[0]]],
+433                                mode="CONSTANT",
+434                                constant_values=-1.0)
+435         selected_classes = tf.gather(class_inds, selected_inds)
+436         padded_classes = tf.pad(selected_classes,
+437                                 paddings=[[0, topk_all - tf.shape(selected_boxes)[0]]],
+438                                 mode="CONSTANT",
+439                                 constant_values=-1.0)
+440         valid_detections = tf.shape(selected_inds)[0]
+441         return padded_boxes, padded_scores, padded_classes, valid_detections
+442 
+443 
+444 def representative_dataset_gen(dataset, ncalib=100):
+445     # Representative dataset generator for use with converter.representative_dataset, returns a generator of np arrays
+446     for n, (path, img, im0s, vid_cap, string) in enumerate(dataset):
+447         input = np.transpose(img, [1, 2, 0])
+448         input = np.expand_dims(input, axis=0).astype(np.float32)
+449         input /= 255
+450         yield [input]
+451         if n >= ncalib:
+452             break
+453 
+454 
+455 def run(
+456         weights=ROOT / 'yolov5s.pt',  # weights path
+457         imgsz=(640, 640),  # inference size h,w
+458         batch_size=1,  # batch size
+459         dynamic=False,  # dynamic batch size
+460 ):
+461     # PyTorch model
+462     im = torch.zeros((batch_size, 3, *imgsz))  # BCHW image
+463     model = attempt_load(weights, map_location=torch.device('cpu'), inplace=True, fuse=False)
+464     _ = model(im)  # inference
+465     model.info()
+466 
+467     # TensorFlow model
+468     im = tf.zeros((batch_size, *imgsz, 3))  # BHWC image
+469     tf_model = TFModel(cfg=model.yaml, model=model, nc=model.nc, imgsz=imgsz)
+470     _ = tf_model.predict(im)  # inference
+471 
+472     # Keras model
+473     im = keras.Input(shape=(*imgsz, 3), batch_size=None if dynamic else batch_size)
+474     keras_model = keras.Model(inputs=im, outputs=tf_model.predict(im))
+475     keras_model.summary()
+476 
+477     LOGGER.info('PyTorch, TensorFlow and Keras models successfully verified.\nUse export.py for TF model export.')
+478 
+479 
+480 def parse_opt():
+481     parser = argparse.ArgumentParser()
+482     parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='weights path')
+483     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
+484     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
+485     parser.add_argument('--dynamic', action='store_true', help='dynamic batch size')
+486     opt = parser.parse_args()
+487     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
+488     print_args(vars(opt))
+489     return opt
+490 
+491 
+492 def main(opt):
+493     run(**vars(opt))
+494 
+495 
+496 if __name__ == "__main__":
+497     opt = parse_opt()
+498     main(opt)
+499 
+
+File: /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/yolo2coco.py
+1 import os
+2 import cv2
+3 import json
+4 import tqdm
+5 coco_formate = {}
+6 coco_formate['images'] = []
+7 coco_formate['annotations'] = []
+8 coco_formate['categories'] =[
+9       {
+10         "supercategory": "none",
+11         "id": 1,
+12         "name": "Car"
+13       },
+14       {
+15         "supercategory": "none",
+16         "id": 2,
+17         "name": "Truck"
+18       },
+19       {
+20         "supercategory": "none",
+21         "id": 3,
+22         "name": "StopSign"
+23       },
+24       {
+25         "supercategory": "none",
+26         "id": 4,
+27         "name": "traffic_lights"
+28       }
+29     ]
+30 
+31 def add_annotations(id, img, height, width):
+32     with open('labels/'+img ,'r') as fp:
+33         annotations = fp.readlines()
+34         for anno in annotations:
+35             cl, x, y, w, h, conf = anno.strip().split(' ')
+36             w_coco = float(w)*width
+37             h_coco = float(h)*height
+38             x_coco = float(x)*width - (w_coco/2)
+39             y_coco = float(y)*height - (h_coco/2)
+40             cl = int(cl) + 1 #coco classes start from 1 yolo start from 0 
+41             coco_formate['annotations'].append({
+42                     "image_id":id ,
+43                     "bbox":[int(x_coco), int(y_coco), int(w_coco), int(h_coco)] ,
+44                     "category_id": cl,
+45                     "id": len(coco_formate['annotations']),
+46                     "confidence": round(float(conf),3)
+47             })
+48 
+49 
+50 
+51 images = os.listdir('test2_images')
+52 
+53 
+54 for id, image in tqdm.tqdm(enumerate(images)):
+55 
+56     h, w, _ = cv2.imread('test2_images/'+image).shape
+57     coco_formate['images'].append({
+58         "file_name": image,
+59         "id": id,
+60         "height": h, 
+61         "width": w
+62     })
+63     img = image.split('.')[0] + '.txt'
+64     try:
+65         add_annotations(id, img, h, w)
+66     except:
+67         pass
+68 
+69 with open("submission.json", "w") as outfile:
+70     json.dump(coco_formate, outfile)
+71 
+
+```
+
+================================ Human Message =================================
+
+[{'type': 'text', 'text': 'Request: NEW PROMPT\nplease change the line thickness to 40 in the custom dataset file\n'}]
+
+================================== Ai Message ==================================
+
+```diff
+--- /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
++++ /gpt-engineer/projects/bahawal32/bahawal32/yolo_helper/custom_detect.py
+@@ -51,3 +51,3 @@
+ 
+-    thickness = 2
++    thickness = 40
+     for i, det in enumerate(pred):
+```
