@@ -49,7 +49,7 @@ if __name__ == "__main__":
     color = (255, 0, 0)
 
     # Line thickness of 2 px
-    thickness = 20
+    thickness = 15
     for i, det in enumerate(pred):
         for *xyxy, conf, cls in reversed(det):
             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
